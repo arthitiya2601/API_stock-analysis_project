@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analyzer Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #f0f2f5; --container-bg: #ffffff; --text-color: #1c1e21;
+            --card-bg: #ffffff; --border-color: #e4e6eb; --accent-color: #1877f2;
+        }
+        body.dark-mode {
+            --bg-color: #0b0e14; --container-bg: #151921; --text-color: #e4e6eb;
+            --card-bg: #1c212b; --border-color: #2b2f3a; --accent-color: #00d4ff;
+        }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg-color); color: var(--text-color); margin: 0; transition: 0.3s; }
+        
+        /* Layout Structure */
+        .app-wrapper { display: flex; max-width: 1300px; margin: auto; min-height: 100vh; gap: 20px; padding: 20px; box-sizing: border-box; }
+        
+        /* Main Content (Left) */
+        .main-content { flex-grow: 1; min-width: 0; }
+        .container { background: var(--container-bg); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 1px solid var(--border-color); }
+
+        /* Sidebar (Right) */
+        .sidebar { width: 280px; flex-shrink: 0; }
+        .sidebar-card { background: var(--container-bg); border-radius: 20px; padding: 20px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.05); position: sticky; top: 20px; }
+        .sidebar-title { font-weight: 700; font-size: 16px; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+        
+        /* Featured Item Style */
+        .featured-item { 
+            display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; 
+            margin-bottom: 10px; cursor: pointer; border: 1px solid var(--border-color); 
+            transition: 0.2s; background: var(--bg-color);
+        }
+        .featured-item:hover { transform: translateX(-5px); border-color: var(--accent-color); background: var(--card-bg); }
+        .featured-logo { width: 35px; height: 35px; border-radius: 8px; background: white; object-fit: contain; padding: 3px; border: 1px solid var(--border-color); }
+        .featured-name { font-weight: 600; font-size: 14px; display: block; }
+        .featured-tag { font-size: 10px; color: var(--accent-color); font-weight: bold; }
+
+        /* UI Elements */
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .search-row { display: flex; gap: 12px; margin-bottom: 15px; }
+        input, select, button { padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--container-bg); color: var(--text-color); font-size: 15px; }
+        input { flex: 1; outline: none; }
+        #btn-analyze { background: var(--accent-color); color: white; border: none; cursor: pointer; font-weight: 600; }
+
+        .watchlist-section { margin-bottom: 25px; padding: 15px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color); }
+        .watch-items { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+        .watch-item { background: var(--bg-color); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: 25px; cursor: pointer; font-size: 13px; font-weight: 500; display: flex; align-items: center; }
+        .remove-btn { margin-left: 8px; color: #ff4d4f; font-weight: bold; }
+
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px; }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 15px; text-align: center; border: 1px solid var(--border-color); }
+        .card-label { font-size: 10px; color: #8e949d; text-transform: uppercase; margin-bottom: 5px; }
+        .card-value { font-size: 16px; font-weight: 700; }
+        
+        .chart-container { position: relative; height: 400px; width: 100%; margin-top: 20px; }
+        #error { color: #f84960; background: rgba(248, 73, 96, 0.1); padding: 12px; border-radius: 10px; margin-bottom: 20px; display: none; text-align: center; }
+        .up { color: #00c087; } .down { color: #f84960; }
+
+        @media (max-width: 900px) {
+            .app-wrapper { flex-direction: column; }
+            .sidebar { width: 100%; order: -1; } /* เอาแนะนำหุ้นไว้บนสุดในมือถือ */
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-wrapper">
+    <!-- Main Content Left -->
+    <main class="main-content">
+        <div class="container">
+            <div class="header-row">
+                <h2 style="margin:0;">Stock Analyzer <span style="color:var(--accent-color)">Pro</span></h2>
+                <button onclick="toggleTheme()" style="background:none; border:1px solid var(--border-color); cursor:pointer; font-size: 12px;">🌓 สลับโหมด</button>
+            </div>
+            
+            <div class="search-row">
+                <input id="symbol" type="text" placeholder="ชื่อหุ้น เช่น TSLA, NVDA" value="AAPL" />
+                <select id="period">
+                    <option value="1mo">1 เดือน</option>
+                    <option value="3mo" selected>3 เดือน</option>
+                    <option value="1y">1 ปี</option>
+                    <option value="5y">5 ปี</option>
+                </select>
+                <button id="btn-analyze" onclick="loadStock()">วิเคราะห์</button>
+            </div>
+
+            <div class="watchlist-section">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 600; font-size: 13px; color: var(--accent-color);">⭐ รายการโปรด</span>
+                    <button onclick="addToWatchlist()" style="padding: 4px 10px; font-size: 11px; cursor: pointer; border-style: dashed; background: none;">+ เพิ่มลงลิสต์</button>
+                </div>
+                <div id="watchlist-items" class="watch-items"></div>
+            </div>
+
+            <div id="error"></div>
+
+            <div class="metrics">
+                <div class="card"><div class="card-label">ราคาปัจจุบัน</div><div id="m-price" class="card-value">—</div></div>
+                <div class="card"><div class="card-label">เปลี่ยนแปลง</div><div id="m-change" class="card-value">—</div></div>
+                <div class="card"><div class="card-label">Market Cap</div><div id="m-cap" class="card-value">—</div></div>
+                <div class="card"><div class="card-label">52W High</div><div id="m-high" class="card-value">—</div></div>
+                <div class="card"><div class="card-label">52W Low</div><div id="m-low" class="card-value">—</div></div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="chart"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <!-- Sidebar Right: แนะนำหุ้นพร้อมโลโก้ -->
+    <aside class="sidebar">
+        <div class="sidebar-card">
+            <div class="sidebar-title">🔥 หุ้นแนะนำ</div>
+            <div id="featured-list"></div>
+            <p style="font-size: 11px; color: #8e949d; margin-top: 15px; line-height: 1.4;">* ข้อมูลเพื่อการศึกษาเท่านั้น</p>
+        </div>
+    </aside>
+</div>
+
+<script>
+    let chartInstance = null;
+    let watchlist = JSON.parse(localStorage.getItem('my_stocks_v2') || '["AAPL", "NVDA", "TSLA"]');
+    
+    const featuredStocks = [
+        { symbol: 'NVDA', tag: 'AI Leader', domain: 'nvidia.com' },
+        { symbol: 'TSLA', tag: 'EV Tech', domain: 'tesla.com' },
+        { symbol: 'AAPL', tag: 'Big Tech', domain: 'apple.com' },
+        { symbol: 'MSFT', tag: 'Cloud Computing', domain: 'microsoft.com' },
+        { symbol: 'GOOGL', tag: 'Search Engine', domain: 'google.com' },
+        { symbol: 'BTC', tag: 'Crypto', domain: 'bitcoin.org' }
+    ];
+
+    function renderFeatured() {
+        const list = document.getElementById('featured-list');
+        list.innerHTML = featuredStocks.map(stock => {
+            // ใช้ Clearbit API ดึงโลโก้ตาม Domain
+            const logoUrl = `https://logo.clearbit.com/${stock.domain}`;
+            const fallbackUrl = `https://ui-avatars.com/api/?name=${stock.symbol}&background=random&color=fff`;
+
+            return `
+                <div class="featured-item" onclick="quickLoad('${stock.symbol}')">
+                    <img src="${logoUrl}" class="featured-logo" onerror="this.src='${fallbackUrl}'">
+                    <div>
+                        <span class="featured-name">${stock.symbol}</span>
+                        <span class="featured-tag">${stock.tag}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // ... (ฟังก์ชัน toggleTheme, renderWatchlist, addToWatchlist, removeFromWatchlist, saveWatch, quickLoad, fmtNum เหมือนเดิม) ...
+    function toggleTheme() {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+        if(chartInstance) loadStock(); 
+    }
+    if(localStorage.getItem('theme') === 'dark') document.body.classList.add('dark-mode');
+
+    function renderWatchlist() {
+        const container = document.getElementById('watchlist-items');
+        container.innerHTML = '';
+        watchlist.forEach(s => {
+            const div = document.createElement('div');
+            div.className = 'watch-item';
+            div.innerHTML = `<span onclick="quickLoad('${s}')">${s}</span><span class="remove-btn" onclick="removeFromWatchlist('${s}')">×</span>`;
+            container.appendChild(div);
+        });
+    }
+
+    function addToWatchlist() {
+        const s = document.getElementById('symbol').value.trim().toUpperCase().replace(/[^A-Z0-9.]/g, "");
+        if (s && !watchlist.includes(s)) { watchlist.push(s); saveWatch(); }
+    }
+
+    function removeFromWatchlist(s) {
+        watchlist = watchlist.filter(item => item !== s);
+        saveWatch();
+    }
+
+    function saveWatch() {
+        localStorage.setItem('my_stocks_v2', JSON.stringify(watchlist));
+        renderWatchlist();
+    }
+
+    function quickLoad(s) {
+        document.getElementById('symbol').value = s;
+        loadStock();
+    }
+
+    function fmtNum(n) {
+        if (!n) return '—';
+        if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
+        if (n >= 1e9)  return (n / 1e9).toFixed(2) + 'B';
+        if (n >= 1e6)  return (n / 1e6).toFixed(2) + 'M';
+        return n.toLocaleString();
+    }
+
+    async function loadStock() {
+        const btn = document.getElementById('btn-analyze');
+        const symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/[^A-Z0-9.]/g, "");
+        const period = document.getElementById('period').value;
+        const errBox = document.getElementById('error');
+
+        btn.textContent = 'กำลังโหลด...';
+        btn.disabled = true;
+        errBox.style.display = 'none';
+
+        try {
+            const res = await fetch(`/stock/${symbol}?period=${period}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'ไม่พบข้อมูลหุ้น');
+
+            document.getElementById('m-price').textContent = '$' + data.currentPrice.toFixed(2);
+            const pct = ((data.currentPrice - data.previousClose) / data.previousClose * 100);
+            const chEl = document.getElementById('m-change');
+            chEl.textContent = (pct >= 0 ? '▲ ' : '▼ ') + pct.toFixed(2) + '%';
+            chEl.className = 'card-value ' + (pct >= 0 ? 'up' : 'down');
+            
+            document.getElementById('m-cap').textContent = '$' + fmtNum(data.marketCap);
+            document.getElementById('m-high').textContent = '$' + data.high52w.toFixed(2);
+            document.getElementById('m-low').textContent = '$' + data.low52w.toFixed(2);
+
+            const ctx = document.getElementById('chart').getContext('2d');
+            const isDark = document.body.classList.contains('dark-mode');
+            const grad = ctx.createLinearGradient(0, 0, 0, 400);
+            grad.addColorStop(0, isDark ? 'rgba(0, 212, 255, 0.3)' : 'rgba(24, 119, 242, 0.2)');
+            grad.addColorStop(1, 'transparent');
+
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [{
+                        data: data.prices,
+                        borderColor: isDark ? '#00d4ff' : '#1877f2',
+                        borderWidth: 3,
+                        backgroundColor: grad,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: isDark ? '#848e9c' : '#888', maxTicksLimit: 8 } },
+                        y: { position: 'right', grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, ticks: { color: isDark ? '#848e9c' : '#888' } }
+                    }
+                }
+            });
+        } catch (e) {
+            errBox.textContent = e.message;
+            errBox.style.display = 'block';
+        } finally {
+            btn.textContent = 'วิเคราะห์';
+            btn.disabled = false;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderFeatured();
+        renderWatchlist();
+        loadStock();
+        document.getElementById('symbol').addEventListener('keydown', e => { if(e.key === 'Enter') loadStock(); });
+    });
+</script>
+</body>
+</html>
