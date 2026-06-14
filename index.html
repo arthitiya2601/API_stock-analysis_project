@@ -9,6 +9,7 @@
         :root {
             --bg-color: #f0f2f5; --container-bg: #ffffff; --text-color: #1c1e21;
             --card-bg: #ffffff; --border-color: #e4e6eb; --accent-color: #1877f2;
+            --sidebar-width: 260px;
         }
         body.dark-mode {
             --bg-color: #0b0e14; --container-bg: #151921; --text-color: #e4e6eb;
@@ -51,29 +52,36 @@
         .watch-item { background: var(--bg-color); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: 25px; cursor: pointer; font-size: 13px; font-weight: 500; display: flex; align-items: center; }
         .remove-btn { margin-left: 8px; color: #ff4d4f; font-weight: bold; }
 
-        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px; }
-        .card { background: var(--card-bg); padding: 15px; border-radius: 15px; text-align: center; border: 1px solid var(--border-color); }
-        .card-label { font-size: 10px; color: #8e949d; text-transform: uppercase; margin-bottom: 5px; }
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 15px; }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 15px; text-align: center; border: 1px solid var(--border-color); box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        .card-label { font-size: 10px; color: #8e949d; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
         .card-value { font-size: 16px; font-weight: 700; }
         
         .chart-container { position: relative; height: 400px; width: 100%; margin-top: 20px; }
-        #error { color: #f84960; background: rgba(248, 73, 96, 0.1); padding: 12px; border-radius: 10px; margin-bottom: 20px; display: none; text-align: center; }
+        #error { color: #f84960; background: rgba(248, 73, 96, 0.1); padding: 12px; border-radius: 10px; margin-bottom: 20px; display: none; text-align: center; font-size: 14px; }
         .up { color: #00c087; } .down { color: #f84960; }
+
+        /* Risk & Trend Analysis Colors */
+        .risk-low { color: #00c087; }
+        .risk-med { color: #ffaa00; }
+        .risk-high { color: #f84960; }
+        .trend-up { color: #00c087; }
+        .trend-down { color: #f84960; }
+        .trend-sideways { color: #8e949d; }
 
         @media (max-width: 900px) {
             .app-wrapper { flex-direction: column; }
-            .sidebar { width: 100%; order: -1; } /* เอาแนะนำหุ้นไว้บนสุดในมือถือ */
+            .sidebar { width: 100%; order: -1; }
         }
     </style>
 </head>
 <body>
 
 <div class="app-wrapper">
-    <!-- Main Content Left -->
     <main class="main-content">
         <div class="container">
             <div class="header-row">
-                <h2 style="margin:0;">Stock Analyzer <span style="color:var(--accent-color)">Pro</span></h2>
+                <h2 style="margin:0;">Stock Analyzer <span style="color:var(--accent-color)">Project</span></h2>
                 <button onclick="toggleTheme()" style="background:none; border:1px solid var(--border-color); cursor:pointer; font-size: 12px;">🌓 สลับโหมด</button>
             </div>
             
@@ -86,6 +94,7 @@
                     <option value="5y">5 ปี</option>
                 </select>
                 <button id="btn-analyze" onclick="loadStock()">วิเคราะห์</button>
+                <button id="btn-download" onclick="downloadCSV()" style="background-color: #00c087; color: white; border: none; font-weight: bold; cursor: pointer;">📥 ดาวน์โหลด CSV</button>
             </div>
 
             <div class="watchlist-section">
@@ -106,13 +115,19 @@
                 <div class="card"><div class="card-label">52W Low</div><div id="m-low" class="card-value">—</div></div>
             </div>
 
+            <div class="metrics" style="margin-top: 10px; margin-bottom: 25px;">
+                <div class="card"><div class="card-label">ผลตอบแทนใน 1 ปี</div><div id="m-return-1y" class="card-value">—</div></div>
+                <div class="card"><div class="card-label">Volatility (ความผันผวน)</div><div id="m-volatility" class="card-value">—</div></div>
+                <div class="card"><div class="card-label">Risk Level (ระดับความเสี่ยง)</div><div id="m-risk" class="card-value">—</div></div>
+                <div class="card"><div class="card-label">Trend (แนวโน้มระบบ)</div><div id="m-trend" class="card-value">—</div></div>
+            </div>
+
             <div class="chart-container">
                 <canvas id="chart"></canvas>
             </div>
         </div>
     </main>
 
-    <!-- Sidebar Right: แนะนำหุ้นพร้อมโลโก้ -->
     <aside class="sidebar">
         <div class="sidebar-card">
             <div class="sidebar-title">🔥 หุ้นแนะนำ</div>
@@ -137,8 +152,8 @@
 
     function renderFeatured() {
         const list = document.getElementById('featured-list');
+        if (!list) return;
         list.innerHTML = featuredStocks.map(stock => {
-            // ใช้ Clearbit API ดึงโลโก้ตาม Domain
             const logoUrl = `https://logo.clearbit.com/${stock.domain}`;
             const fallbackUrl = `https://ui-avatars.com/api/?name=${stock.symbol}&background=random&color=fff`;
 
@@ -154,7 +169,6 @@
         }).join('');
     }
 
-    // ... (ฟังก์ชัน toggleTheme, renderWatchlist, addToWatchlist, removeFromWatchlist, saveWatch, quickLoad, fmtNum เหมือนเดิม) ...
     function toggleTheme() {
         document.body.classList.toggle('dark-mode');
         localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
@@ -164,6 +178,7 @@
 
     function renderWatchlist() {
         const container = document.getElementById('watchlist-items');
+        if (!container) return;
         container.innerHTML = '';
         watchlist.forEach(s => {
             const div = document.createElement('div');
@@ -203,10 +218,19 @@
 
     async function loadStock() {
         const btn = document.getElementById('btn-analyze');
-        const symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/[^A-Z0-9.]/g, "");
-        const period = document.getElementById('period').value;
+        const symbolInput = document.getElementById('symbol');
         const errBox = document.getElementById('error');
 
+        if (!symbolInput || !btn) return;
+
+        let symbol = symbolInput.value.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
+        
+        if (symbol === "BTC") {
+            symbol = "BTC-USD";
+            symbolInput.value = "BTC-USD";
+        }
+
+        const period = document.getElementById('period').value;
         btn.textContent = 'กำลังโหลด...';
         btn.disabled = true;
         errBox.style.display = 'none';
@@ -216,6 +240,7 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'ไม่พบข้อมูลหุ้น');
 
+            // อัปเดตข้อมูลทั่วไป แถวที่ 1
             document.getElementById('m-price').textContent = '$' + data.currentPrice.toFixed(2);
             const pct = ((data.currentPrice - data.previousClose) / data.previousClose * 100);
             const chEl = document.getElementById('m-change');
@@ -226,6 +251,67 @@
             document.getElementById('m-high').textContent = '$' + data.high52w.toFixed(2);
             document.getElementById('m-low').textContent = '$' + data.low52w.toFixed(2);
 
+            // ==========================================
+            // โซนคำนวณ Metrics เชิงเทคนิคแถวที่ 2
+            // ==========================================
+            if (data.prices && data.prices.length > 0) {
+                const prices = data.prices;
+                const currentPrice = prices[prices.length - 1];
+
+                // 1. ผลตอบแทนใน 1 ปี (1Y Return)
+                const price1YAgo = prices[0]; 
+                const return1Y = ((currentPrice - price1YAgo) / price1YAgo) * 100;
+                const retEl = document.getElementById('m-return-1y');
+                if (retEl) {
+                    retEl.textContent = (return1Y >= 0 ? '+' : '') + return1Y.toFixed(2) + '%';
+                    retEl.className = 'card-value ' + (return1Y >= 0 ? 'up' : 'down');
+                }
+
+                // 2. ความผันผวน (Volatility Annualized %)
+                const returns = [];
+                for(let i = 1; i < prices.length; i++) {
+                    returns.push((prices[i] - prices[i-1]) / prices[i-1]);
+                }
+                const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+                const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+                const dailyVolatility = Math.sqrt(variance);
+                const annualizedVolatility = dailyVolatility * Math.sqrt(252) * 100; 
+                const volEl = document.getElementById('m-volatility');
+                if (volEl) volEl.textContent = annualizedVolatility.toFixed(2) + '%';
+
+                // 3. ประเมินระดับความเสี่ยง (Risk Level)
+                const riskEl = document.getElementById('m-risk');
+                if (riskEl) {
+                    if (annualizedVolatility < 20) {
+                        riskEl.textContent = 'ต่ำ (Low)';
+                        riskEl.className = 'card-value risk-low';
+                    } else if (annualizedVolatility >= 20 && annualizedVolatility <= 40) {
+                        riskEl.textContent = 'กลาง (Medium)';
+                        riskEl.className = 'card-value risk-med';
+                    } else {
+                        riskEl.textContent = 'สูง (High)';
+                        riskEl.className = 'card-value risk-high';
+                    }
+                }
+
+                // 4. วิเคราะห์แนวโน้มระบบ (Trend)
+                const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+                const trendEl = document.getElementById('m-trend');
+                if (trendEl) {
+                    if (currentPrice > avgPrice * 1.02) {
+                        trendEl.textContent = '▲ ขาขึ้น (Bullish)';
+                        trendEl.className = 'card-value trend-up';
+                    } else if (currentPrice < avgPrice * 0.98) {
+                        trendEl.textContent = '▼ ขาลง (Bearish)';
+                        trendEl.className = 'card-value trend-down';
+                    } else {
+                        trendEl.textContent = '◀▶ Sideways';
+                        trendEl.className = 'card-value trend-sideways';
+                    }
+                }
+            }
+
+            // วาดกราฟราคาหลัก
             const ctx = document.getElementById('chart').getContext('2d');
             const isDark = document.body.classList.contains('dark-mode');
             const grad = ctx.createLinearGradient(0, 0, 0, 400);
@@ -252,7 +338,7 @@
                     plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
                     scales: {
                         x: { grid: { display: false }, ticks: { color: isDark ? '#848e9c' : '#888', maxTicksLimit: 8 } },
-                        y: { position: 'right', grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, ticks: { color: isDark ? '#848e9c' : '#888' } }
+                        y: { position: 'right', grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, ticks: { color: isDark ? '#848e9c' : '#888', callback: v => '$' + v } }
                     }
                 }
             });
@@ -263,6 +349,21 @@
             btn.textContent = 'วิเคราะห์';
             btn.disabled = false;
         }
+    }
+
+    // ฟังก์ชันยิงขอดาวน์โหลดไฟล์ CSV ส่งตรงเข้า Power BI
+    function downloadCSV() {
+        const symbolInput = document.getElementById('symbol');
+        if (!symbolInput) return;
+
+        let symbol = symbolInput.value.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
+        if (symbol === "BTC") {
+            symbol = "BTC-USD";
+        }
+        
+        const period = document.getElementById('period').value;
+        const downloadUrl = `/stock/${symbol}/download?period=${period}`;
+        window.location.href = downloadUrl;
     }
 
     document.addEventListener('DOMContentLoaded', () => {
